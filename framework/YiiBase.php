@@ -404,76 +404,102 @@ class YiiBase
 	 * @return boolean whether the class has been loaded successfully
 	 * @throws CException When class name does not match class file in debug mode.
 	 */
-	public static function autoload($className,$classMapOnly=false)
-	{
-		foreach (self::$autoloaderFilters as $filter)
-		{
-			if (is_array($filter)
-				&& isset($filter[0]) && isset($filter[1])
-				&& is_string($filter[0]) && is_string($filter[1])
-				&& true === call_user_func(array($filter[0], $filter[1]), $className)
-			)
-			{
-				return true;
-			}
-			elseif (is_string($filter)
-				&& true === call_user_func($filter, $className)
-			)
-			{
-				return true;
-			}
-			elseif (is_callable($filter)
-				&& true === $filter($className)
-			)
-			{
-				return true;
-			}
-		}
+    public static function autoload($className,$classMapOnly=false)
+    {
+        // custom function to skip Laravel vendor classes
+        foreach ([
+                     'Illuminate\\',
+                     'Laravel\\',
+                     'Symfony\\',
+                     'Composer\\',
+                     'Psr\\',
+                     'Monolog\\',
+                     'App\\',
+                     'Livewire\\',
+                     'PhpParser\\',
+                     'Doctrine\\',
+                     'GuzzleHttp\\',
+                 ] as $prefix) {
+            if (str_starts_with($className, $prefix)) {
+                return false;
+            }
+        }
 
-		// use include so that the error PHP file may appear
-		if(isset(self::$classMap[$className]))
-			include(self::$classMap[$className]);
-		elseif(isset(self::$_coreClasses[$className]))
-			include(YII_PATH.self::$_coreClasses[$className]);
-		elseif($classMapOnly)
-			return false;
-		else
-		{
-			// include class file relying on include_path
-			if(strpos($className,'\\')===false)  // class without namespace
-			{
-				if(self::$enableIncludePath===false)
-				{
-					foreach(self::$_includePaths as $path)
-					{
-						$classFile=$path.DIRECTORY_SEPARATOR.$className.'.php';
-						if(is_file($classFile))
-						{
-							include($classFile);
-							if(YII_DEBUG && basename(realpath($classFile))!==$className.'.php')
-								throw new CException(Yii::t('yii','Class name "{class}" does not match class file "{file}".', array(
-									'{class}'=>$className,
-									'{file}'=>$classFile,
-								)));
-							break;
-						}
-					}
-				}
-				else
-					include($className.'.php');
-			}
-			else  // class name with namespace in PHP 5.3
-			{
-				$namespace=str_replace('\\','.',ltrim($className,'\\'));
-				if(($path=self::getPathOfAlias($namespace))!==false && is_file($path.'.php'))
-					include($path.'.php');
-				else
-					return false;
-			}
-			return class_exists($className,false) || interface_exists($className,false);
-		}
-		return true;
-	}
+        foreach (self::$autoloaderFilters as $filter)
+        {
+            if (is_array($filter)
+                && isset($filter[0]) && isset($filter[1])
+                && is_string($filter[0]) && is_string($filter[1])
+                && true === call_user_func(array($filter[0], $filter[1]), $className)
+            )
+            {
+                return true;
+            }
+            elseif (is_string($filter)
+                && true === call_user_func($filter, $className)
+            )
+            {
+                return true;
+            }
+            elseif (is_callable($filter)
+                && true === $filter($className)
+            )
+            {
+                return true;
+            }
+        }
+
+        // use include so that the error PHP file may appear
+        if(isset(self::$classMap[$className]))
+            include(self::$classMap[$className]);
+        elseif(isset(self::$_coreClasses[$className]))
+            include(YII_PATH.self::$_coreClasses[$className]);
+        elseif($classMapOnly)
+            return false;
+        else
+        {
+            // include class file relying on include_path
+            if(strpos($className,'\\')===false)  // class without namespace
+            {
+                if(self::$enableIncludePath===false)
+                {
+                    foreach(self::$_includePaths as $path)
+                    {
+                        $classFile=$path.DIRECTORY_SEPARATOR.$className.'.php';
+                        if(is_file($classFile))
+                        {
+                            include($classFile);
+                            if(YII_DEBUG && basename(realpath($classFile))!==$className.'.php')
+                                throw new CException(Yii::t('yii','Class name "{class}" does not match class file "{file}".', array(
+                                    '{class}'=>$className,
+                                    '{file}'=>$classFile,
+                                )));
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    $classFile = $className.'.php';
+                    $fullPath = stream_resolve_include_path($classFile);
+                    if($fullPath !== false && is_file($fullPath))
+                        include($classFile);
+                    else
+                        return false; // Does not exist
+                }
+            }
+            else  // class name with namespace in PHP 5.3
+            {
+                $namespace=str_replace('\\','.',ltrim($className,'\\'));
+                if(($path=self::getPathOfAlias($namespace))!==false && is_file($path.'.php'))
+                    include($path.'.php');
+                else
+                    return false;
+            }
+            return class_exists($className,false) || interface_exists($className,false);
+        }
+        return true;
+    }
 
 	/**
 	 * Writes a trace message.
